@@ -37,6 +37,7 @@ import { useTraceDiffStore } from '../../stores/trace-diff-store';
 import { useEmbeddedState } from '../../stores/embedded-store';
 import { useShallow } from 'zustand/react/shallow';
 import { useSearchTraces } from '../../hooks/useTraceDiscovery';
+import type { OrderBy } from '../../model/order-by';
 
 // export for tests
 export function SearchTracePageImpl() {
@@ -66,6 +67,17 @@ export function SearchTracePageImpl() {
     }
   }, [searchQuery, searchData?.query, navigate]);
 
+  // Upgrade legacy URLs that carry only `lookback` without `start`/`end`
+  // (e.g. links from HotROD). searchQueryFromUrl derives the timestamps in
+  // memory so the API call succeeds, then we rewrite the URL to the canonical
+  // form so the link becomes repeatable and shareable.
+  const rawUrlState = useMemo(() => getUrlState(location.search), [location.search]);
+  useEffect(() => {
+    if (searchQuery?.start && searchQuery?.end && !rawUrlState.start && !rawUrlState.end) {
+      navigate(getUrl(searchQueryToUrlState(searchQuery)), { replace: true });
+    }
+  }, [searchQuery, rawUrlState, navigate]);
+
   const { uploadedSummaries, uploadedRawTraces, handleTracesLoaded } = useUploadedTraces();
 
   // Merge API and uploaded summaries, deduplicating by traceID (API results take precedence).
@@ -91,7 +103,7 @@ export function SearchTracePageImpl() {
     };
   }, [searchData, uploadedSummaries]);
 
-  const [sortBy, setSortBy] = useState(orderBy.MOST_RECENT);
+  const [sortBy, setSortBy] = useState<OrderBy>(orderBy.MOST_RECENT);
   const [activeTab, setActiveTab] = useState<'searchForm' | 'fileLoader'>('searchForm');
 
   const { panelWidth, collapsed, setPanelWidth, setCollapsed } = useSearchPanelStore(
@@ -148,7 +160,7 @@ export function SearchTracePageImpl() {
   const config = useConfig();
   const { disableFileUploadControl } = config;
 
-  const handleSortChange = useCallback((newSortBy: string) => {
+  const handleSortChange = useCallback((newSortBy: OrderBy) => {
     setSortBy(newSortBy);
     trackSortByChange(newSortBy);
   }, []);
